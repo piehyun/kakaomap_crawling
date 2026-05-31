@@ -1,0 +1,208 @@
+# 패키지, 라이브러리 설치
+!python.exe -m pip install --upgrade pip
+!pip install webdriver-manager selenium
+
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
+!wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+
+!apt update -qq
+
+!apt install -y -qq ./google-chrome-stable_current_amd64.deb
+
+!which google-chrome
+!google-chrome --version
+
+# 주소 리스트 크롤링
+# Google Colab + Selenium + KakaoMap 안정화 버전
+
+import re
+import time
+import pandas as pd
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# Chrome 옵션 설정
+
+options = Options()
+
+options.binary_location = "/usr/bin/google-chrome"
+
+# 최신 headless
+options.add_argument("--headless=new")
+
+# Colab 필수
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-setuid-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+
+
+options.add_argument("--disable-gpu")
+options.add_argument("--disable-webgl")
+options.add_argument("--disable-3d-apis")
+options.add_argument("--disable-software-rasterizer")
+
+
+options.add_argument("--disable-extensions")
+options.add_argument("--disable-background-networking")
+options.add_argument("--disable-sync")
+options.add_argument("--no-first-run")
+options.add_argument("--disable-default-apps")
+
+
+options.add_argument("--remote-debugging-port=9222")
+
+
+options.add_argument("--window-size=1920,1080")
+
+options.add_argument("--disable-features=VizDisplayCompositor")
+
+
+
+# Driver 실행
+driver = webdriver.Chrome(options=options)
+wait = WebDriverWait(driver, 15)
+
+
+# KakaoMap 접속
+driver.get("https://map.kakao.com/")
+time.sleep(5)
+
+print("TITLE :", driver.title)
+print("URL :", driver.current_url)
+
+
+
+def clean_text(el):
+    return (el.get_attribute("title") or el.text or "").strip()
+
+
+
+# 첫 번째 검색 결과 주소 추출
+def extract_first_address(driver, wait):
+
+    first_item = wait.until(
+        EC.visibility_of_element_located(
+            (
+                By.XPATH,
+                "//*[@id='info.search.place.list']//li[contains(@class, 'PlaceItem')][1]"
+            )
+        )
+    )
+
+    # 주소 요소 대기
+    wait.until(
+        EC.visibility_of_element_located(
+            (By.CSS_SELECTOR, "p[data-id='address']")
+        )
+    )
+
+    address_el = first_item.find_element(
+        By.CSS_SELECTOR,
+        "p[data-id='address']"
+    )
+
+    lot_el = first_item.find_element(
+        By.CSS_SELECTOR,
+        "p[data-id='otherAddr']"
+    )
+
+    re_address = clean_text(address_el)
+    re_num = clean_text(lot_el)
+
+    # "(지번)" 제거
+    re_num = re.sub(r"^\(지번\)\s*", "", re_num).strip()
+
+    return re_address, re_num
+
+
+# 테스트 데이터
+
+addresses = [
+    "아지트",
+    "집",
+    "당근",
+    "토끼굴",
+    "바나나",
+    "오리농장",
+    "커프",
+    "비나레스토랑",
+    "성심당"
+]
+
+re_df = pd.DataFrame({
+    "address_keyword": addresses
+})
+
+re_df["re_address"] = ""
+re_df["re_num"] = ""
+
+
+# 서울 + 테스트 데이터, 기타 상황에 맞게 지역명 수정 가능
+
+for i, keyword in re_df["address_keyword"].fillna("").items():
+
+    keyword = f"서울 {keyword}".strip()
+
+    try:
+
+        print(f"\n검색중 : {keyword}")
+
+        # 검색창 로딩 대기
+        search_box = wait.until(
+            EC.visibility_of_element_located(
+                (By.ID, "search.keyword.query")
+            )
+        )
+
+        # clear() 대신 사용
+        search_box.send_keys(Keys.CONTROL + "a")
+        search_box.send_keys(Keys.DELETE)
+
+        time.sleep(0.5)
+
+        # 검색어 입력
+        search_box.send_keys(keyword)
+
+        time.sleep(0.5)
+
+        # 엔터
+        search_box.send_keys(Keys.ENTER)
+
+        # 카카오맵 로딩 대기
+        time.sleep(3)
+
+        # 주소 추출
+        re_address, re_num = extract_first_address(driver, wait)
+
+        re_df.at[i, "re_address"] = re_address
+        re_df.at[i, "re_num"] = re_num
+
+        print("도로명 :", re_address)
+        print("지번 :", re_num)
+
+    except Exception as e:
+
+        print(f"[실패] {keyword}")
+        print(e)
+
+    # 요청 간격
+    time.sleep(2)
+
+
+# 결과 데이터프레임 head 출력
+
+print("\n====================")
+print(re_df.head(10))
+
+# 종료
+driver.quit()
