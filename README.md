@@ -5,8 +5,8 @@
 지역명 등으로 키워드를 조합해 다양한 목적으로 활용할 수 있습니다.
 
 ## 코드 파일 소개
-1. kakao_map_crawling: 주피터 노트북에서 실행 시 활용
-2. kakao_map_crawling_코랩: 코랩에서 실행 시 활용
+- kakao_map_crawling: 주피터 노트북에서 실행 시 활용
+- kakao_map_crawling_코랩: 코랩에서 실행 시 활용
 
 ## 사용한 기술
 - Python
