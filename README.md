@@ -6,7 +6,7 @@
 
 ## 코드 파일 소개
 - kakao_map_crawling: 주피터 노트북에서 실행 시 활용
-- kakao_map_crawling_코랩: 코랩에서 실행 시 활용
+- kakao_map_crawling_colab: 코랩에서 실행 시 활용
 
 ## 사용한 기술
 - Python
