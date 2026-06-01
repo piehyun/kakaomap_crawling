@@ -1,0 +1,189 @@
+# 필요한 라이브러리, 패키지 설치
+import sys
+
+!{sys.executable} -m pip install -U selenium webdriver-manager
+
+!python.exe -m pip install --upgrade pip
+!pip install webdriver-manager selenium
+!pip install selenium
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
+!pip install webdriver_manager
+!pip install chromedriver_autoinstaller
+
+# 크롬 드라이버 확인
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options
+
+options = Options()
+options.add_argument('--no-sandbox')
+options.add_argument('--disable-dev-shm-usage')
+
+# 드라이버 설정
+driver = webdriver.Chrome(options=options)
+driver.get("https://map.kakao.com/")
+print(driver.title)
+
+# 1. 파일 컬럼명 + 지역명 키워드로 크롤링
+import re
+import time
+import pandas as pd
+
+from selenium.webdriver.common.by import By #html 요소 찾는 방식 지정
+from selenium.webdriver.common.keys import Keys #엔터키 입력 가능
+from selenium.webdriver.support.ui import WebDriverWait #찾는 요소 나올 때까지 대기
+from selenium.webdriver.support import expected_conditions as EC #기다리는 조건 정의
+
+# 텍스트 깔끔하게 추출
+def clean_text(el):
+    return (el.get_attribute("title") or el.text or "").strip()
+
+# 검색 결과의 첫 번째 장소에서 주소를 가져오는 함수
+def extract_first_address(driver, wait):
+    first_item = wait.until(
+        EC.presence_of_element_located(
+            (
+                By.XPATH,
+                "//*[@id='info.search.place.list']//li[contains(@class, 'PlaceItem')][1]"
+            )
+        )
+    )
+    # 도로명 주소
+    address_el = first_item.find_element(By.CSS_SELECTOR, "p[data-id='address']")
+    # 지번 주소
+    lot_el = first_item.find_element(By.CSS_SELECTOR, "p[data-id='otherAddr']")
+
+    re_address = clean_text(address_el)
+    re_num = clean_text(lot_el)
+
+    # text로 가져왔을 때 "(지번) 일도일동 1425-3" 형태일 수 있으므로 제거
+    re_num = re.sub(r"^\(지번\)\s*", "", re_num).strip()
+
+    return re_address, re_num
+
+re_df = pd.read_csv("finaltest.csv")
+re_df["re_address"] = ""
+re_df["re_num"] = ""
+wait = WebDriverWait(driver, 10)
+
+driver.get("https://map.kakao.com/")
+
+for i, merc_nm in re_df["merc_nm"].fillna("").items():
+    # 검색 정확도 높이기 위해 지역명 앞에 붙임
+    keyword = f"제주 {merc_nm}".strip()
+
+    try:
+        # search.keyword.query = ID
+        search_box = wait.until(
+            EC.presence_of_element_located((By.ID, "search.keyword.query"))
+        )
+
+        search_box.clear()
+        search_box.send_keys(keyword)
+        search_box.send_keys(Keys.ENTER)
+
+        # 검색 결과 로딩 대기
+        time.sleep(1.2)
+
+        re_address, re_num = extract_first_address(driver, wait)
+
+        re_df.at[i, "re_address"] = re_address
+        re_df.at[i, "re_num"] = re_num
+
+        #print(i, keyword, re_address, re_num)
+        
+    # 실패 로그 출력
+    except Exception as e:
+        re_df.at[i, "re_address"] = ""
+        re_df.at[i, "re_num"] = ""
+        print(f"[실패] {i} / {keyword} / {e}")
+
+    # 너무 빠른 요청 방지
+    time.sleep(0.7)
+    
+#csv 파일 새로 저장
+re_df.to_csv("제주_카카오맵_주소추출.csv", index=False, encoding="utf-8-sig")
+
+# 2. 리스트 데이터 프레임으로 변환 후 크롤링
+import sys
+
+!{sys.executable} -m pip install -U pandas
+import re
+import time
+import pandas as pd
+
+from selenium.webdriver.common.by import By #html 요소 찾는 방식 지정
+from selenium.webdriver.common.keys import Keys #엔터키 입력 가능
+from selenium.webdriver.support.ui import WebDriverWait #찾는 요소 나올 때까지 대기
+from selenium.webdriver.support import expected_conditions as EC #기다리는 조건 정의
+
+# 텍스트 깔끔하게 추출
+def clean_text(el):
+    return (el.get_attribute("title") or el.text or "").strip()
+
+# 검색 결과의 첫 번째 장소에서 주소를 가져오는 함수
+def extract_first_address(driver, wait):
+    first_item = wait.until(
+        EC.presence_of_element_located(
+            (
+                By.XPATH,
+                "//*[@id='info.search.place.list']//li[contains(@class, 'PlaceItem')][1]"
+            )
+        )
+    )
+    # 도로명 주소
+    address_el = first_item.find_element(By.CSS_SELECTOR, "p[data-id='address']")
+    # 지번 주소
+    lot_el = first_item.find_element(By.CSS_SELECTOR, "p[data-id='otherAddr']")
+
+    re_address = clean_text(address_el)
+    re_num = clean_text(lot_el)
+
+    # text로 가져왔을 때 "(지번) 일도일동 1425-3" 형태일 수 있으므로 제거
+    re_num = re.sub(r"^\(지번\)\s*", "", re_num).strip()
+
+    return re_address, re_num
+
+addresses = ["아지트", "집", "당근", "토끼굴", "바나나", "오리농장", "커프", "비나레스토랑", "성심당"]
+re_df = pd.DataFrame({"address_keyword": addresses})
+
+re_df["re_address"] = ""
+re_df["re_num"] = ""
+wait = WebDriverWait(driver, 10)
+
+driver.get("https://map.kakao.com/")
+
+for i, keyword in re_df["address_keyword"].fillna("").items():
+    # 검색 정확도 높이기 위해 지역명 앞에 붙임
+    keyword = f"서울 {keyword}".strip()
+
+    try:
+        # search.keyword.query = ID
+        search_box = wait.until(
+            EC.presence_of_element_located((By.ID, "search.keyword.query"))
+        )
+
+        search_box.clear()
+        search_box.send_keys(keyword)
+        search_box.send_keys(Keys.ENTER)
+
+        # 검색 결과 로딩 대기
+        time.sleep(1.2)
+
+        re_address, re_num = extract_first_address(driver, wait)
+
+        re_df.at[i, "re_address"] = re_address
+        re_df.at[i, "re_num"] = re_num
+
+        #print(i, keyword, re_address, re_num)
+        
+    # 실패 로그 출력
+    except Exception as e:
+        print(f"[실패] {keyword} / {e}")
+
+    # 너무 빠른 요청 방지
+    time.sleep(1)
+print(re_df.head(10))
